@@ -1,0 +1,13 @@
+{
+  "name": "node-server-test2",
+  "version": "0.0.0",
+  "description": "NodeServerTest2",
+  "main": "app.js",
+  "author": {
+    "name": "KnightH"
+  },
+  "dependencies": {
+    "colors": "^1.1.2",
+    "socket.io": "^2.0.3"
+  }
+}
