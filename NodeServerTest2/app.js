@@ -107,11 +107,7 @@ io.sockets.on('connection', function (socket) {
         //console.log(getClientNames().toString());
         
     });
-    //when person accepts another person -> redirect message
-    socket.on('accept', function (name) {
-        console.log("%s accepts %s", userName[socket.id], name);
-        getClientWithName(name).emit('accept', userName[socket.id]);
-    });
+    
     //when person declines another person -> redirect message
     socket.on('decline', function (name) {
         console.log("%s declines %s", userName[socket.id], name);
@@ -126,6 +122,10 @@ io.sockets.on('connection', function (socket) {
 
     //when person accepts a challenge
     socket.on('accept', function (name) {
+        //when person accepts another person -> redirect message
+        console.log("%s accepts %s", userName[socket.id], name);
+        getClientWithName(name).emit('accept', userName[socket.id]);
+
         //array of a single game
         game = [];
         //push current player and challenger
