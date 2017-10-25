@@ -1,12 +1,11 @@
-
-const uuid = require('uuid');
 const server = require('http').createServer();
 const io = require('socket.io')(server, {
     path: '/',
     serveClient: false,
+    // below are engine.IO options
     pingInterval: 10000,
     pingTimeout: 5000,
-    cookie: false
+    cookie: false // Not persistent connection
 });
 
 //number of total clients
@@ -16,12 +15,12 @@ var connections = [];
 var userName = {};
 
 //games that are currently playing
-let gameDict = {};
+var games = [];
 
 //notes in the first game
 var gamesNotes = [];
 
-const PORT = 3000;
+const PORT = 9000;
 
 server.listen(PORT, function () {
     console.log(`Server listening at port ${PORT}`);
@@ -30,50 +29,13 @@ server.listen(PORT, function () {
 // On first connect
 io.sockets.on('connection', function (socket) {
 
-//    socket.sendBuffer = []; // clear buffers
+    socket.sendBuffer = []; // clear buffers
     connections.push(socket); // Add client to the connections list
 
-    console.log(`${socket.id} ${socket.request.connection.remoteAddress}:${socket.request.connection.remotePort} connected`);
+    console.log("%s %s:%s connected".green, socket.id, socket.request.connection.remoteAddress, socket.request.connection.remotePort);
 
     // Add new function
     // socket.on("EVENT NAME", FUNCTION_TO_RUN_WHEN_EVENT_IS_CALLED);
-
-    // Simply check if namespace is available
-    socket.on('nameIsAvailable', (nameStr) => {
-        let isDup = isNameDuplicate(nameStr);
-        socket.emit('nameIsAvailable', isDup);
-    }); // Works
-    // Lock the name to the client
-    socket.on('nameSubscribe', (nameStr) => {
-        let isDup = isNameDuplicate(nameStr);
-        if (!isDup) {
-            userName[socket.id] = nameStr;
-        }
-        let subscribed = !isDup;
-        socket.emit('nameSubscribe', subscribed);
-    }); // Works
-
-    socket.on('getAllRooms', () => {
-        let json = JSON.stringify({
-            "gameRooms": getAllRooms()
-        });
-        socket.emit('getAllRooms', json);
-    });
-    socket.on('getAllPlayers', () => {
-        let json = JSON.stringify({
-            "clients": getAllPlayers()
-        });
-        socket.emit('getAllPlayers', json);
-    });
-    socket.on('getRoomAllClients', (roomUUIDStr) => {
-        let json = JSON.stringify({
-            "clients": getRoomAllClients(roomUUIDStr)
-        });
-        socket.emit('getRoomAllClients', json);
-    });
-
-
-
 
     socket.on('new message', function (data) {
         console.log("message: %s", data);
@@ -108,8 +70,7 @@ io.sockets.on('connection', function (socket) {
         // Emit to everyone in the room but itself
         socket.boardcast.emit('note first', data);
     });
-    
-    /*
+
     //NAME HANDLING
     socket.on('name', function (name) {
         var isDup = false;
@@ -126,8 +87,8 @@ io.sockets.on('connection', function (socket) {
             socket.emit('name', 'NO');
             console.log("%s is unable to name to %s", socket.id, name);
         }
+
     });
-    */
 
     //get all clients
     socket.on('get clients', function () {
@@ -142,32 +103,37 @@ io.sockets.on('connection', function (socket) {
 
     //when person challenges another person -> redirect message
     socket.on('challenge', function (name) {
-        console.log("%s challenges %s", userName[socket.id], name);
+        console.log(`${userName[socket.id]} challenges ${name}!`);
         getClientWithName(name).emit('challenge', userName[socket.id]);
-    });
-    //when person declines another person -> redirect message
-    socket.on('decline', function (name) {
-        console.log("%s declines %s challenge...", userName[socket.id], name);
-        getClientWithName(name).emit('decline', userName[socket.id]);
     });
     //when person accepts another person -> redirect message
     socket.on('accept', function (name) {
-        console.log("%s accepts %s", userName[socket.id], name);
+        console.log(`${userName[socket.id]} accepts ${name}'s challenge!`);
         getClientWithName(name).emit('accept', userName[socket.id]);
     });
+    //when person declines another person -> redirect message
+    socket.on('decline', function (name) {
+        console.log(`${userName[socket.id]} declines ${name} challenge...`);
+        getClientWithName(name).emit('decline', userName[socket.id]);
+    });
+
     //when person accepts a challenge
     socket.on('accept', function (name) {
         //array of a single game
         game = [];
         //push current player and challenger
-        game.push(socket); // socket of the accepter
-        game.push(getClientWithName(name)); // socket of the challenger
-        gameDict[uuid.v4()] = game;
+        game.push(socket);
+        game.push(getClientWithName(name));
+        //push to games array
+        games.push(game);
+
     });
+
+
 
     // when the user disconnects
     socket.on('disconnect', function () {
-        console.log("%s left", socket.id);
+        console.log("%s left".red, socket.id);
         //remove name
         delete userName[socket.id];
         //remove from connections
@@ -181,51 +147,26 @@ io.sockets.on('connection', function (socket) {
     });
 
     socket.on('error', function () {
-        console.log("%s connection error", socket.id);
+        console.log("%s connection error".red, socket.id);
     });
+
     socket.on('reconnecting', function (Number) {
-        console.log("%s attempts to reconnect number %s", socket.id, Number);
+        console.log("%s attempts to reconnect number %s".red, socket.id, Number);
     });
     socket.on('reconnect', function (Number) {
-        console.log("%s successful reconnection after %s attempts", socket.id, Number);
+        console.log("%s successful reconnection after %s attempts".green, socket.id, Number);
     });
     socket.on('reconnect_error', function () {
-        console.log("%s reconnection error", socket.id);
+        console.log("%s reconnection error".red, socket.id);
     });
 
-    function getAllPlayers() {
-        // Get the Player name
-        let arrPlayers = [];
+    function getClientNames() {
+        var arr = [];
         for (var i = 0; i < connections.length; i++) {
-            arrPlayers.push(userName[connections[i].id]);
+            arr.push(userName[connections[i].id]);
         }
-        return arrPlayers;
+        return arr;
     }
-
-    function getAllRooms() {
-        // Get all UUID of all rooms
-        let arrRoom = [];
-        for (let roomUUID in gameDict) {
-            arrRoom.push(roomUUID);
-        }
-        return arrRoom;
-    }
-
-    function getRoomAllClients(roomUUID) {
-        // Get all player names in a room
-        let arrRoom = [];
-        for (let rUUID in gameDict) {
-            if (rUUID === roomUUID) {
-                let game = gameDict[roomUUID];
-                for (let socket in game){
-                    arrRoom.push(userName[socket.id]);
-                }
-                break;
-            }
-        }
-        return arrRoom;
-    }
-
     function getClientIpPort() {
         var arr = [];
         for (var i = 0; i < connections.length; i++) {
@@ -233,7 +174,6 @@ io.sockets.on('connection', function (socket) {
         }
         return arr;
     }
-
     function getClientGames() {
         var arr = [];
         for (var i = 0; i < games.length; i++) {
@@ -246,20 +186,22 @@ io.sockets.on('connection', function (socket) {
 
         return arr;
     }
+    function getClientGamesString() {
+        var arr = [];
+        for (var i = 0; i < games.length; i++) {
+            var arr2 = [];
+            for (var j = 0; j < games[i].length; j++) {
+                arr2.push(userName[game[i][j].id]);
+            }
+            arr.push("[" + arr2.join(',') + "]");
+        }
+        return "[" + arr.join(',') + "]";
+    }
     function getClientWithName(name) {
         for (var i = 0; i < connections.length; i++) {
             if (name === userName[connections[i].id]) {
                 return connections[i];
             }
         }
-    }
-    function isNameDuplicate(nameStr) {
-        var isDup = false;
-        for (var key in userName) {
-            if (key !== socket.id && userName[key] === nameStr) {
-                isDup = true;
-            }
-        }
-        return isDup;
     }
 });

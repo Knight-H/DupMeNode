@@ -303,3 +303,4 @@ __pycache__/
 
 # OpenCover UI analysis results
 OpenCover/
+/NodeServerTest2/nbproject/private/
