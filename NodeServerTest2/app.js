@@ -1,13 +1,11 @@
-var colors = require("colors");
 const server = require('http').createServer();
-
 const io = require('socket.io')(server, {
     path: '/',
     serveClient: false,
     // below are engine.IO options
     pingInterval: 10000,
     pingTimeout: 5000,
-    cookie: false
+    cookie: false // Not persistent connection
 });
 
 //number of total clients
@@ -22,31 +20,33 @@ var games = [];
 //notes in the first game
 var gamesNotes = [];
 
-var port = 9000;
+const PORT = 9000;
 
-server.listen(port, function () {
-    console.log('Server listening at port %d', port);
+server.listen(PORT, function () {
+    console.log(`Server listening at port ${PORT}`);
 });
 
-
+// On first connect
 io.sockets.on('connection', function (socket) {
+
     socket.sendBuffer = []; // clear buffers
-    connections.push(socket);
+    connections.push(socket); // Add client to the connections list
 
     console.log("%s %s:%s connected".green, socket.id, socket.request.connection.remoteAddress, socket.request.connection.remotePort);
-    
 
-    // when the client emits 'new message', this listens and executes
+    // Add new function
+    // socket.on("EVENT NAME", FUNCTION_TO_RUN_WHEN_EVENT_IS_CALLED);
+
     socket.on('new message', function (data) {
-        console.log("message: %s".yellow, data);
-        
+        console.log("message: %s", data);
     });
+
     socket.on('note', function (data) {
-        console.log("note: %s".yellow, data);
+        console.log("note: %s", data);
     });
 
     socket.on('note first', function (data) {
-        console.log("%s> %s".yellow, userName[socket.id], data);
+        console.log("%s> %s", userName[socket.id], data);
 
         var room = -1;
         for (var i = 0; i < games.length; i++) {
@@ -56,25 +56,19 @@ io.sockets.on('connection', function (socket) {
                 }
             }
         }
-        
 
-        if (typeof gamesNotes[room] === 'undefined') {
+        if (typeof (gamesNotes[room]) === 'undefined') {
             gamesNotes[room] = [];
         }
-        //save to gamesNotes[room]
+
+        // Save the note to the gamesNotes[room]
+        // Used to verify score later
         if (data.state === true) {
-            gamesNote[room].push([data.time, data.note]); 
+            gamesNotes[room].push([data.time, data.note]);
         }
-        
 
-        //emit to ppl in the room
-        for (var i = 0; i < games[room].length; i++) {
-            if (games[room][i].id !== userName[socket.id]) {
-                games[room][i].emit('note first', data);
-            }
-        }
-        
-
+        // Emit to everyone in the room but itself
+        socket.boardcast.emit('note first', data);
     });
 
     //NAME HANDLING
@@ -93,35 +87,34 @@ io.sockets.on('connection', function (socket) {
             socket.emit('name', 'NO');
             console.log("%s is unable to name to %s", socket.id, name);
         }
-        
+
     });
 
     //get all clients
     socket.on('get clients', function () {
-
+        // Respond to the client of the available ppl
         socket.emit('get clients', JSON.stringify({
             clientNames: getClientNames(),
             games: getClientGames(),
             clientIpPort: getClientIpPort()
         }));
         //console.log(getClientNames().toString());
-        
+    });
+
+    //when person challenges another person -> redirect message
+    socket.on('challenge', function (name) {
+        console.log(`${userName[socket.id]} challenges ${name}!`);
+        getClientWithName(name).emit('challenge', userName[socket.id]);
     });
     //when person accepts another person -> redirect message
     socket.on('accept', function (name) {
-        console.log("%s accepts %s", userName[socket.id], name);
+        console.log(`${userName[socket.id]} accepts ${name}'s challenge!`);
         getClientWithName(name).emit('accept', userName[socket.id]);
     });
     //when person declines another person -> redirect message
     socket.on('decline', function (name) {
-        console.log("%s declines %s", userName[socket.id], name);
+        console.log("${userName[socket.id]} declines ${name} challenge...");
         getClientWithName(name).emit('decline', userName[socket.id]);
-    });
-    //when person challenges another person -> redirect message
-    socket.on('challenge', function (name) {
-        console.log("%s challenges %s!", userName[socket.id], name);
-        getClientWithName(name).emit('challenge', userName[socket.id]);
-      
     });
 
     //when person accepts a challenge
@@ -190,7 +183,7 @@ io.sockets.on('connection', function (socket) {
             }
             arr.push(arr2);
         }
-        
+
         return arr;
     }
     function getClientGamesString() {
@@ -210,7 +203,5 @@ io.sockets.on('connection', function (socket) {
                 return connections[i];
             }
         }
-        
-        
     }
 });
