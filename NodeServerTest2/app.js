@@ -108,26 +108,26 @@ io.sockets.on('connection', function (socket) {
         // Emit to everyone in the room but itself
         socket.boardcast.emit('note first', data);
     });
-    
+
     /*
-    //NAME HANDLING
-    socket.on('name', function (name) {
-        var isDup = false;
-        for (var key in userName) {
-            if (key !== socket.id && userName[key] === name) {
-                isDup = true;
-            }
-        }
-        if (!isDup) {
-            userName[socket.id] = name;
-            socket.emit('name', 'OK');
-            console.log("%s is named %s", socket.id, name);
-        } else {
-            socket.emit('name', 'NO');
-            console.log("%s is unable to name to %s", socket.id, name);
-        }
-    });
-    */
+     //NAME HANDLING
+     socket.on('name', function (name) {
+     var isDup = false;
+     for (var key in userName) {
+     if (key !== socket.id && userName[key] === name) {
+     isDup = true;
+     }
+     }
+     if (!isDup) {
+     userName[socket.id] = name;
+     socket.emit('name', 'OK');
+     console.log("%s is named %s", socket.id, name);
+     } else {
+     socket.emit('name', 'NO');
+     console.log("%s is unable to name to %s", socket.id, name);
+     }
+     });
+     */
 
     //get all clients
     socket.on('get clients', function () {
@@ -158,12 +158,49 @@ io.sockets.on('connection', function (socket) {
     //when person accepts a challenge
     socket.on('accept', function (name) {
         //array of a single game
-        game = [];
+        let game = [];
         //push current player and challenger
         game.push(socket); // socket of the accepter
         game.push(getClientWithName(name)); // socket of the challenger
         gameDict[uuid.v4()] = game;
     });
+
+    function gameRealTime() {
+
+    }
+
+    function gameTakeTurn() {
+
+    }
+
+    // Accept game
+    // Create room and push both client
+    // Randomly choose a client as MAIN to fire notes
+    // MAIN client notified as MAIN client
+    // Other client notified as NOT main client
+
+    // - Real Time Mode - (using room;)
+    // MAIN client notify server to start
+    // server notify all client in the room to start
+    // (Client side) MAIN client count down 10s
+    // (Client side) other client count down 20s
+    // MAIN fire note at server
+    // server propragate note to other client
+    // Other client fire back notes at server
+    // server calculate score
+    // server determine winner
+
+    // - Non-Real Time Mode - (using room;)
+    // MAIN client notify server to start
+    // server notify Other client to wait
+    // (Client side) MAIN client count down 10s
+    // (Client side) MAIN fire note at server
+    // server enqueue the notes
+    // (Client side) Other client wait for server to notify MAIN is done
+    // Once MAIN 10s run out, notify server 10s run out
+    // server notify other client to get ready
+    // server dequeue to all client but MAIN
+    // client calculate score and determine winner
 
     // when the user disconnects
     socket.on('disconnect', function () {
@@ -217,7 +254,7 @@ io.sockets.on('connection', function (socket) {
         for (let rUUID in gameDict) {
             if (rUUID === roomUUID) {
                 let game = gameDict[roomUUID];
-                for (let socket in game){
+                for (let socket in game) {
                     arrRoom.push(userName[socket.id]);
                 }
                 break;
