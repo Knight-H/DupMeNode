@@ -38,13 +38,28 @@ io.sockets.on('connection', function (socket) {
     // Add new function
     // socket.on("EVENT NAME", FUNCTION_TO_RUN_WHEN_EVENT_IS_CALLED);
 
-    // Simply check if namespace is available
+    /**
+     * event 'nameIsAvailable'
+     * @param {string} nameStr 
+     * emit 'nameIsAvailable'
+     * emitObject bool, true if the name is available
+     */
     socket.on('nameIsAvailable', (nameStr) => {
+        // Simply check if namespace is available
         let isDup = isNameDuplicate(nameStr);
         socket.emit('nameIsAvailable', isDup);
     }); // Works
-    // Lock the name to the client
+
+    /**
+     * Apply and Lock the name for the client
+     * 
+     * event 'nameSubscribe'
+     * @param {string} nameStr The name that user wants 
+     * emit 'nameSubscribe'
+     * emitObject true if the name is successfully locked
+     */
     socket.on('nameSubscribe', (nameStr) => {
+        // Lock the name to the client
         let isDup = isNameDuplicate(nameStr);
         if (!isDup) {
             userName[socket.id] = nameStr;
@@ -53,22 +68,53 @@ io.sockets.on('connection', function (socket) {
         socket.emit('nameSubscribe', subscribed);
     }); // Works
 
+    /**
+     * Get the available/on going rooms
+     * 
+     * event 'getAllRooms'
+     * emit 'getAllRooms'
+     * emitObject dict{"gameRooms": array[string playerName]}
+     */
     socket.on('getAllRooms', () => {
-        let json = JSON.stringify({
+        let json = {
             "gameRooms": getAllRooms()
-        });
+        };
         socket.emit('getAllRooms', json);
     });
+
+    /**
+     * Get all the connected player
+     * 
+     * event 'getAllPlayers'
+     * emit 'getAllPlayers'
+     * emitObject dict{"clients": array[string playerName]}
+     */
     socket.on('getAllPlayers', () => {
-        let json = JSON.stringify({
+        let json = {
             "clients": getAllPlayers()
-        });
+        };
         socket.emit('getAllPlayers', json);
     });
+
+    /**
+     * event 'getRoomAllClients'
+     * @param {string} roomUUIDStr the UUID of the room to request
+     * 
+     * emit 'getRoomAllClients'
+     * 
+     * if roomUUIDStr is not null
+     * emitObject dict{"clients": array[string playerNameInRoom]}
+     * 
+     * if roomUUIDStr is null
+     * emitObject null
+     */
     socket.on('getRoomAllClients', (roomUUIDStr) => {
-        let json = JSON.stringify({
-            "clients": getRoomAllClients(roomUUIDStr)
-        });
+        let json = null;
+        if (roomUUIDStr !== null) {
+            json = JSON.stringify({
+                "clients": getRoomAllClients(roomUUIDStr)
+            });
+        }
         socket.emit('getRoomAllClients', json);
     });
 
@@ -157,12 +203,32 @@ io.sockets.on('connection', function (socket) {
     });
     //when person accepts a challenge
     socket.on('accept', function (name) {
-        //array of a single game
-        let game = [];
+
+        let game = []; // array for a single room
+        let roomUUID = uuid.v4(); // Room Identifier
+
         //push current player and challenger
         game.push(socket); // socket of the accepter
         game.push(getClientWithName(name)); // socket of the challenger
-        gameDict[uuid.v4()] = game;
+
+        gameDict[roomUUID] = game;
+
+        // Send UUID of the room they are in
+        for (let tmpClient in game) {
+            tmpClient.emit("gameRoomUUID", roomUUID);
+        }
+    });
+    // When a player in a room send a note
+    socket.on('note', (noteStructure) => {
+        let game = gameDict[noteStructure.roomUUID];
+
+        // Send the client to all other client
+        for (let tmpClient in game) {
+            if (tmpClient.id === socket.id) {
+                continue;
+            }
+            tmpClient.send(noteStructure);
+        }
     });
 
     function gameRealTime() {
