@@ -37,7 +37,11 @@ io.sockets.on('connection', function (socket) {
 //    socket.sendBuffer = []; // clear buffers
     connections.push(socket); // Add client to the connections list
 
-    console.log(`${socket.id} ${socket.request.connection.remoteAddress}:${socket.request.connection.remotePort} connected`);
+    console.log("%s %s:%s connected",
+            socket.id,
+            socket.request.connection.remoteAddress,
+            socket.request.connection.remotePort
+            );
 
     // Add new function
     // socket.on("EVENT NAME", FUNCTION_TO_RUN_WHEN_EVENT_IS_CALLED);
@@ -151,7 +155,8 @@ io.sockets.on('connection', function (socket) {
      * @param {string} challengerName The name of the challenger
      * 
      * emit 'gameRoomUUID' to both challenger and acceptor
-     * emitObject {string} roomUUID the name of the room
+     * emitObject {RoomAndOrder} 
+     * - {"roomUUID": roomUUID, "startPlayer": nameOfStartingPlayer}
      */
     socket.on('accept', (challengerName) => {
 
@@ -167,7 +172,13 @@ io.sockets.on('connection', function (socket) {
 
         // Send UUID of the room they are in
         for (let tmpClient in game) {
-            tmpClient.emit("gameRoomUUID", roomUUID);
+            let starterSocket = chooseRandomElement(game);
+            let roomAndOrder = {
+                "roomUUID": roomUUID,
+                "startPlayer": userName[starterSocket.id]
+            };
+            // Emit to all socket in the room
+            tmpClient.emit("gameRoomUUID", roomAndOrder);
         }
     });
 
@@ -182,8 +193,8 @@ io.sockets.on('connection', function (socket) {
      */
     socket.on('decline', function (challengerName) {
         //when person declines another person -> redirect message
-        console.log("%s declines %s challenge...", userName[socket.id], name);
-        getClientWithName(name).emit('decline', userName[socket.id]);
+        console.log("%s declines %s challenge...", userName[socket.id], challengerName);
+        getClientWithName(challengerName).emit('decline', userName[socket.id]);
     });
 
     /**
@@ -201,7 +212,7 @@ io.sockets.on('connection', function (socket) {
         // When a player in a room send a note
         let game = gameDict[noteStructure.roomUUID];
 
-        // Send the client to all other client
+        // Send to all client/socket but the sender
         for (let tmpClient in game) {
             if (tmpClient.id === socket.id) {
                 continue;
@@ -231,6 +242,48 @@ io.sockets.on('connection', function (socket) {
         //delete userName[socket.id];
         // Source
         // https://stackoverflow.com/questions/5767325/how-do-i-remove-a-particular-element-from-an-array-in-javascript
+
+        // Remove from connections
+        var index = 0;
+        while (index < connections.length) {
+            if (connections[index].id === socket.id) {
+                break;
+            }
+            index++;
+        }
+        connections.splice(index, 1);
+    });
+
+    /**
+     * When player disconnect from room
+     * 
+     * event 'playerDisconnectFromRoom'
+     * @param {string} roomUUID the room player is disconnecting from
+     * 
+     * emit 'playerDisconnectFromRoom' to all but sender
+     * emitObject {string} player name of who is disconnecting
+     */
+    socket.on("playerDisconnectFromRoom", (roomUUID) => {
+        // when the user disconnects
+
+        console.log("%s left from room %s", socket.id, roomUUID);
+
+        // When a player in a room send a note
+        let game = gameDict[roomUUID];
+
+        // Send to all client/socket but the sender
+        for (let tmpClient in game) {
+            if (tmpClient.id === socket.id) {
+                continue;
+            }
+            tmpClient.emit("playerDisconnectFromRoom", userName[socket.id]);
+        }
+
+        // Remove an element from list
+        let idxUserName = userName.indexOf(socket.id);
+        if (idxUserName > -1) {
+            userName.splice(idxUserName, 1);
+        }
 
         // Remove from connections
         var index = 0;
@@ -279,6 +332,16 @@ io.sockets.on('connection', function (socket) {
      * USEFUL FUNCTIONS
      * USEFUL FUNCTIONS
      */
+
+    /**
+     * Choose a random element from a list
+     * 
+     * @param {array} arrList
+     * return {object} random element from the list
+     */
+    function chooseRandomElement(arrList) {
+        return arrList[Math.floor(Math.random() * arrList.length)];
+    }
 
     /**
      * Get all players currectly connected
