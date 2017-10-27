@@ -73,7 +73,7 @@ io.sockets.on('connection', function (socket) {
      * 
      * event 'getAllRooms'
      * emit 'getAllRooms'
-     * emitObject dict{"gameRooms": array[string playerName]}
+     * emitObject dict{"gameRooms": array[string roomUUID]}
      */
     socket.on('getAllRooms', () => {
         let json = {
@@ -97,6 +97,8 @@ io.sockets.on('connection', function (socket) {
     });
 
     /**
+     * Get the name of all players in a room
+     * 
      * event 'getRoomAllClients'
      * @param {string} roomUUIDStr the UUID of the room to request
      * 
