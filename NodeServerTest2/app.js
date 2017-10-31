@@ -3,18 +3,18 @@
  * Alias
  * 'socket' type: 'client' 
  */
-
+const colors = require('colors');
 
 const uuid = require('uuid');
 const server = require('http').createServer();
 const io = require('socket.io')(server, {
     path: '/',
     serveClient: false,
-    pingInterval: 10000,
-    pingTimeout: 5000,
+    pingInterval: 5000,
+    pingTimeout: 30000,
     cookie: false
 });
-const PORT = 3000;
+const PORT = 9000;
 server.listen(PORT, function () {
     console.log(`Server listening at port ${PORT}`);
 });
@@ -31,13 +31,18 @@ var userName = {};
 // UUID (str) : sockets for/in the room (socket.id)
 let gameDict = {};
 
+// scores that players are currently holding
+// dictionary, key:value pair
+// socket.id(str) : score (int)
+let scoreDict = {};
+
 // On first connect
 io.sockets.on('connection', function (socket) {
 
 //    socket.sendBuffer = []; // clear buffers
     connections.push(socket); // Add client to the connections list
 
-    console.log("%s %s:%s connected",
+    console.log("%s %s:%s connected".green,
             socket.id,
             socket.request.connection.remoteAddress,
             socket.request.connection.remotePort
@@ -76,6 +81,9 @@ io.sockets.on('connection', function (socket) {
         }
         let subscribed = !isDup;
         socket.emit('nameSubscribe', subscribed);
+
+        if (subscribed) console.log((socket.id + " is now named " + nameStr).cyan);
+        else console.log((socket.id + " is unable to name " + nameStr).cyan);
     });
 
     /**
@@ -132,6 +140,52 @@ io.sockets.on('connection', function (socket) {
         socket.emit('getRoomAllClients', json);
     });
 
+    /**Stupid get clients where it returns everything lol -> just for ease of testing 
+      * event 'get clients'
+
+     *  emit 'get clients'
+     * emitObject dict{ "clientNames":  array[string playerNames],
+     *                     "games": dict {"roomUUID": array[string playerNameInRoom]},
+     *                      "clientIpPort" : array[string clientIPs]}
+    */
+    socket.on('get clients', () => {
+        /*
+        let arrKey = [];
+        let arrVal = [];
+        for (let key in gameDict) {
+
+            //console.log("room uuid: " + key);
+
+            let tmpArr = []
+            for (var i = 0; i < gameDict[key].length; i++){
+                //console.log("members: " + userName[gameDict[key][i].id]);
+                tmpArr.push(userName[gameDict[key][i].id]);
+            }
+            
+            arrKey.push(key);
+            arrVal.push(tmpArr);
+        }*/
+
+        gameDictTmp = {};
+        for (let key in gameDict) {
+            let tmpArr = [];
+            for (var i = 0; i < gameDict[key].length; i++) {
+                //console.log("members: " + userName[gameDict[key][i].id]);
+                tmpArr.push(userName[gameDict[key][i].id]);
+            }
+            gameDictTmp[key] = tmpArr;
+        }
+
+        socket.emit('get clients', JSON.stringify(
+            {
+                "clientNames": getAllPlayers(),
+                "games": gameDictTmp, 
+                "clientIpPort": getClientIpPort()
+            }
+        ));
+
+    });
+      
     /**
      * User challenge another user
      * 
@@ -160,6 +214,9 @@ io.sockets.on('connection', function (socket) {
      */
     socket.on('accept', (challengerName) => {
 
+        console.log("%s accepts %s", userName[socket.id], challengerName);
+        getClientWithName(challengerName).emit('accept', userName[socket.id]);
+
         let game = []; // array for a single room
         let roomUUID = uuid.v4(); // Room Identifier
 
@@ -169,18 +226,49 @@ io.sockets.on('connection', function (socket) {
 
         // key UUID: game ARRAY
         gameDict[roomUUID] = game;
+        console.log(roomUUID + " room created");
 
+
+        let starterSocket = chooseRandomElement(game);
+        let roomAndOrder = {
+            "roomUUID": roomUUID,
+            "startPlayer": userName[starterSocket.id]
+        };
         // Send UUID of the room they are in
-        for (let tmpClient in game) {
-            let starterSocket = chooseRandomElement(game);
-            let roomAndOrder = {
-                "roomUUID": roomUUID,
-                "startPlayer": userName[starterSocket.id]
-            };
+        for (let i = 0; i < game.length; i++) {
+            //console.log(game[i] + " is being sent");
             // Emit to all socket in the room
-            tmpClient.emit("gameRoomUUID", roomAndOrder);
+            game[i].emit("gameRoomUUID", roomAndOrder);
         }
     });
+    /**
+     * New round event received from following person (!isFirst) and need new first player
+     * 
+     * event 'new round'
+    * @param {string} roomUUID The name of the challenger
+     * 
+     * emit 'new round' to all people in room
+     * emitObject {RoomAndOrder}     -> NO IT DOESNT MAKE SENSE!
+     * - {"roomUUID": roomUUID, "startPlayer": nameOfStartingPlayer}
+     */
+    socket.on("new round", (room) => {
+        console.log("new round received from " + userName[socket.id]);
+        /*
+        game = gameDict[room];
+        let starterSocket = chooseRandomElement(game);
+        let roomAndOrder = {
+            "roomUUID": roomUUID,
+            "startPlayer": userName[starterSocket.id]
+        };
+        // Send UUID of the room they are in
+        for (let i = 0; i < game.length; i++) {
+            //console.log(game[i] + " is being sent");
+            // Emit to all socket in the room
+            game[i].emit("gameRoomUUID", roomAndOrder);
+        }*/
+
+    });
+
 
     /**
      * Decline challenger from the challenge
@@ -198,6 +286,68 @@ io.sockets.on('connection', function (socket) {
     });
 
     /**
+     * Timeout handling
+     * 
+     * event 'timeout'
+     * @param {string} roomUUID the room UUID to emit to
+     * 
+     * emit 'timeout' to all clients in room except the one who emit
+     */
+    socket.on('timeout', function (room) {
+        console.log(userName[socket.id] + " timed out");
+
+        let game = gameDict[room];
+        for (let i = 0; i < game.length; i++) {
+            if (game[i].id === socket.id)
+                continue;
+            game[i].emit('timeout');
+        }
+    });
+     /**
+     * Score handling
+     * 
+     * event 'score'
+     * @param {int} score 
+     * 
+     */
+    socket.on('score', function (score) {
+        console.log((userName[socket.id] + " got the score of " + score).yellow);
+
+        if (socket.id in scoreDict) {
+            scoreDict[socket.id] += score;
+        } else {
+            scoreDict[socket.id] = score;
+        }
+        
+
+    });
+    /**
+    * Game end handling
+    * 
+    * event 'game end' -> from the !isFirst
+    * @param {string} roomUUID the room UUID to emit to
+    *
+    * emit 'game end' to all clients in room 
+    * emitObject {ScoreStructure}
+    *           { username : score}
+    */
+    socket.on('game end', function (room) {
+        console.log(userName[socket.id] + " says game has ended");
+
+        let ScoreStructure = {};
+        for (let key in scoreDict) {
+            ScoreStructure[userName[key]] = scoreDict[key];
+        }
+        let game = gameDict[room];
+        for (let i = 0; i < game.length; i++) {
+            game[i].emit('game end', {
+                scores: ScoreStructure
+            });
+        }
+
+    });
+
+    /**
      * Send note information to other in the same room
      * 
      * Send a note one pressed to other player in the same room
@@ -209,17 +359,35 @@ io.sockets.on('connection', function (socket) {
      * emitObject {NoteStructure} noteStructure of a note
      */
     socket.on('note', (noteStructure) => {
+
+        console.log(noteStructure.gray);
+
+        let note = JSON.parse(noteStructure);
+
         // When a player in a room send a note
-        let game = gameDict[noteStructure.roomUUID];
+        let game = gameDict[note.roomUUID];
+
+        /*
+        for (var keys in gameDict) {
+            console.log("is " + note.roomUUID + " equal to " + keys + " " + (noteStructure.roomUUID === keys)); // false since diff datatype?
+            for (let i = 0; i < gameDict[keys].length; i++) {
+                console.log("USER IN ROOM: " + userName[gameDict[keys][i].id]);
+            }
+            
+        }*/
 
         // Send to all client/socket but the sender
-        for (let tmpClient in game) {
-            if (tmpClient.id === socket.id) {
+        for (let i = 0; i < game.length; i++) {
+            if (game[i].id === socket.id) {
                 continue;
             }
-            tmpClient.send(noteStructure);
+            game[i].emit("note", noteStructure);
         }
     });
+    /*
+    socket.on('ping', () => {
+        console.log(socket.id + " ping");
+    });*/
 
     /**
      * When a user disconnect from server
@@ -228,16 +396,13 @@ io.sockets.on('connection', function (socket) {
      * 
      * event 'disconnect'
      */
-    socket.on('disconnect', function () {
+    socket.on('disconnect', function (reason) {
         // when the user disconnects
 
-        console.log("%s left", socket.id);
+        console.log(("%s left because of "+reason).red, socket.id);
 
         // Remove an element from list
-        let idxUserName = userName.indexOf(socket.id);
-        if (idxUserName > -1) {
-            userName.splice(idxUserName, 1);
-        }
+        delete userName[socket.id];
         // Not the right way to remove element
         //delete userName[socket.id];
         // Source
@@ -252,6 +417,21 @@ io.sockets.on('connection', function (socket) {
             index++;
         }
         connections.splice(index, 1);
+
+        let keyToRemove = "";
+        //remove from games
+        for (let key in gameDict) {
+            for (let j = 0; j < gameDict[key]; j++) {
+                if (gameDict[key][j].id === socket.id) {
+                    keyToRemove = key;
+                    break;
+                }
+            }
+        }
+        delete gameDict[keyToRemove];
+
+        //remove from scores
+        delete scoreDict[socket.id]; 
     });
 
     /**
@@ -295,6 +475,16 @@ io.sockets.on('connection', function (socket) {
         }
         connections.splice(index, 1);
     });
+
+    
+
+
+    socket.on('pong', function (data) {
+        //console.log(("Pong received from client "+socket.id).gray);
+    });
+    
+
+    
 
     // Accept game
     // Create room and push both client
@@ -431,18 +621,19 @@ io.sockets.on('connection', function (socket) {
         return arr;
     }
 
+    /*
     function getClientGames() {
         var arr = [];
-        for (var i = 0; i < games.length; i++) {
+        for (var keys in gameDict) {
             var arr2 = [];
-            for (var j = 0; j < games[i].length; j++) {
-                arr2.push(userName[game[i][j].id]);
+            for (var j = 0; j < gamesDict[keys].length; j++) {
+                arr2.push(userName[gamesDict[keys][j].id]);
             }
             arr.push(arr2);
         }
 
         return arr;
-    }
+    }*/
 
     /*
      * BASIC CONNECTION EVENT
@@ -472,20 +663,19 @@ io.sockets.on('connection', function (socket) {
      * DEBUG STUFF
      * DEBUG STUFF
      */
-
+    /*
     socket.on('accept', function (name) {
         //when person accepts another person -> redirect message
         console.log("%s accepts %s", userName[socket.id], name);
         getClientWithName(name).emit('accept', userName[socket.id]);
-    });
+    });*/
+
 
     socket.on('new message', function (data) {
         console.log("message: %s", data);
     });
 
-    socket.on('note', function (data) {
-        console.log("note: %s", data);
-    });
+    
 
     /*
      socket.on('note first', function (data) {
@@ -534,25 +724,11 @@ io.sockets.on('connection', function (socket) {
      }
      });
      */
+    
 
-    /*
-     //get all clients
-     socket.on('get clients', function () {
-     // Respond to the client of the available ppl
-     socket.emit('get clients', JSON.stringify({
-     clientNames: getClientNames(),
-     games: getClientGames(),
-     clientIpPort: getClientIpPort()
-     }));
-     //console.log(getClientNames().toString());
-     });
-     */
-
-    function gameRealTime() {
-
-    }
-
-    function gameTakeTurn() {
-
-    }
 });
+
+function sendHeartbeat() {
+    io.sockets.emit('ping', { beat: 1 });
+}
+setInterval(sendHeartbeat, 5000);
