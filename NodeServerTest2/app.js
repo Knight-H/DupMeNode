@@ -421,13 +421,16 @@ io.sockets.on('connection', function (socket) {
         let keyToRemove = "";
         //remove from games
         for (let key in gameDict) {
-            for (let j = 0; j < gameDict[key]; j++) {
+
+            for (let j = 0; j < gameDict[key].length; j++) {
+                //console.log("checking if " + gameDict[key][j].id + " is equal to " + socket.id + " " + (gameDict[key][j].id === socket.id));
                 if (gameDict[key][j].id === socket.id) {
                     keyToRemove = key;
                     break;
                 }
             }
         }
+        console.log(" I am removing the room " + keyToRemove);
         delete gameDict[keyToRemove];
 
         //remove from scores
@@ -446,7 +449,7 @@ io.sockets.on('connection', function (socket) {
     socket.on("playerDisconnectFromRoom", (roomUUID) => {
         // when the user disconnects
 
-        console.log("%s left from room %s", socket.id, roomUUID);
+        console.log("%s %s left from room %s", socket.id, userName[socket.id], roomUUID);
 
         // When a player in a room send a note
         let game = gameDict[roomUUID];
@@ -476,7 +479,16 @@ io.sockets.on('connection', function (socket) {
         connections.splice(index, 1);
     });
 
-    
+    /**
+     * When game end
+     * 
+     * event 'game end'
+     * @param {string} roomUUID the room uuid
+     * 
+     */
+    socket.on('game end', function (roomUUID) {
+        delete gameDict[roomUUID];
+    });
 
 
     socket.on('pong', function (data) {
