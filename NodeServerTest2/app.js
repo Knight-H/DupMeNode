@@ -332,13 +332,13 @@ io.sockets.on('connection', function (socket) {
     *           { username : score}
     */
     socket.on('game end', function (room) {
-        console.log(userName[socket.id] + " says game has ended");
+        console.log(userName[socket.id] + " says game has ended in room " + room);
 
         let ScoreStructure = {};
         for (let key in scoreDict) {
             ScoreStructure[userName[key]] = scoreDict[key];
         }
-        let game = gameDict[room];
+        let game = gameDict[room];  
         for (let i = 0; i < game.length; i++) {
             game[i].emit('game end', {
                 scores: ScoreStructure
@@ -618,7 +618,7 @@ io.sockets.on('connection', function (socket) {
     function isNameDuplicate(nameStr) {
         var isDup = false;
         for (var key in userName) {
-            if (key !== socket.id && userName[key] === nameStr) {
+            if (key !== socket.id && userName[key].toLowerCase() === nameStr.toLowerCase()) {
                 isDup = true;
             }
         }
