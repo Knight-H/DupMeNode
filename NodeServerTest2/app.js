@@ -1,8 +1,3 @@
-
-/**
- * Alias
- * 'socket' type: 'client' 
- */
 const colors = require('colors');
 
 const uuid = require('uuid');
@@ -14,10 +9,21 @@ const io = require('socket.io')(server, {
     pingTimeout: 30000,
     cookie: false
 });
-const PORT = 9000;
+const PORT = 9357;
 server.listen(PORT, function () {
     console.log(`Server listening at port ${PORT}`);
 });
+
+var exec = require('child_process').execFile;
+var broadcaster = function () {
+    exec('broadcast/Broadcaster.exe', function (err, data) {
+        console.log('Broadcaster program is missing');
+        process.exit(1);
+    });
+    console.log('Broadcasting...');
+}
+broadcaster();
+
 
 // The list of all client currently connected
 var connections = [];
@@ -47,9 +53,6 @@ io.sockets.on('connection', function (socket) {
             socket.request.connection.remoteAddress,
             socket.request.connection.remotePort
             );
-
-    // Add new function
-    // socket.on("EVENT NAME", FUNCTION_TO_RUN_WHEN_EVENT_IS_CALLED);
 
     /**
      * event 'nameIsAvailable'
@@ -86,14 +89,6 @@ io.sockets.on('connection', function (socket) {
         else console.log((socket.id + " is unable to name " + nameStr).cyan);
     });
 
-    /**
-     * Get the available/on going rooms
-     * 
-     * event 'getAllRooms'
-     * 
-     * emit 'getAllRooms'
-     * emitObject dict{"gameRooms": array[string roomUUID]}
-     */
     socket.on('getAllRooms', () => {
         let json = {
             "gameRooms": getAllRooms()
@@ -101,14 +96,6 @@ io.sockets.on('connection', function (socket) {
         socket.emit('getAllRooms', json);
     });
 
-    /**
-     * Get all the connected player
-     * 
-     * event 'getAllPlayers'
-     * 
-     * emit 'getAllPlayers'
-     * emitObject dict{"clients": array[string playerName]}
-     */
     socket.on('getAllPlayers', () => {
         let json = {
             "clients": getAllPlayers()
@@ -139,38 +126,11 @@ io.sockets.on('connection', function (socket) {
         }
         socket.emit('getRoomAllClients', json);
     });
-
-    /**Stupid get clients where it returns everything lol -> just for ease of testing 
-      * event 'get clients'
-
-     *  emit 'get clients'
-     * emitObject dict{ "clientNames":  array[string playerNames],
-     *                     "games": dict {"roomUUID": array[string playerNameInRoom]},
-     *                      "clientIpPort" : array[string clientIPs]}
-    */
     socket.on('get clients', () => {
-        /*
-        let arrKey = [];
-        let arrVal = [];
-        for (let key in gameDict) {
-
-            //console.log("room uuid: " + key);
-
-            let tmpArr = []
-            for (var i = 0; i < gameDict[key].length; i++){
-                //console.log("members: " + userName[gameDict[key][i].id]);
-                tmpArr.push(userName[gameDict[key][i].id]);
-            }
-            
-            arrKey.push(key);
-            arrVal.push(tmpArr);
-        }*/
-
         gameDictTmp = {};
         for (let key in gameDict) {
             let tmpArr = [];
             for (var i = 0; i < gameDict[key].length; i++) {
-                //console.log("members: " + userName[gameDict[key][i].id]);
                 tmpArr.push(userName[gameDict[key][i].id]);
             }
             gameDictTmp[key] = tmpArr;
@@ -253,20 +213,6 @@ io.sockets.on('connection', function (socket) {
      */
     socket.on("new round", (room) => {
         console.log("new round received from " + userName[socket.id]);
-        /*
-        game = gameDict[room];
-        let starterSocket = chooseRandomElement(game);
-        let roomAndOrder = {
-            "roomUUID": roomUUID,
-            "startPlayer": userName[starterSocket.id]
-        };
-        // Send UUID of the room they are in
-        for (let i = 0; i < game.length; i++) {
-            //console.log(game[i] + " is being sent");
-            // Emit to all socket in the room
-            game[i].emit("gameRoomUUID", roomAndOrder);
-        }*/
-
     });
 
 
@@ -367,15 +313,6 @@ io.sockets.on('connection', function (socket) {
         // When a player in a room send a note
         let game = gameDict[note.roomUUID];
 
-        /*
-        for (var keys in gameDict) {
-            console.log("is " + note.roomUUID + " equal to " + keys + " " + (noteStructure.roomUUID === keys)); // false since diff datatype?
-            for (let i = 0; i < gameDict[keys].length; i++) {
-                console.log("USER IN ROOM: " + userName[gameDict[keys][i].id]);
-            }
-            
-        }*/
-
         // Send to all client/socket but the sender
         for (let i = 0; i < game.length; i++) {
             if (game[i].id === socket.id) {
@@ -384,18 +321,6 @@ io.sockets.on('connection', function (socket) {
             game[i].emit("note", noteStructure);
         }
     });
-    /*
-    socket.on('ping', () => {
-        console.log(socket.id + " ping");
-    });*/
-
-    /**
-     * When a user disconnect from server
-     * 
-     * Remove the disconnected user from server
-     * 
-     * event 'disconnect'
-     */
     socket.on('disconnect', function (reason) {
         // when the user disconnects
 
@@ -490,50 +415,9 @@ io.sockets.on('connection', function (socket) {
         delete gameDict[roomUUID];
     });
 
-
     socket.on('pong', function (data) {
         //console.log(("Pong received from client "+socket.id).gray);
     });
-    
-
-    
-
-    // Accept game
-    // Create room and push both client
-    // Randomly choose a client as MAIN to fire notes
-    // MAIN client notified as MAIN client
-    // Other client notified as NOT main client
-
-    // - Real Time Mode - (using room;)
-    // MAIN client notify server to start
-    // server notify all client in the room to start
-    // (Client side) MAIN client count down 10s
-    // (Client side) other client count down 20s
-    // MAIN fire note at server
-    // server propragate note to other client
-    // Other client fire back notes at server
-    // server calculate score
-    // server determine winner
-
-    // - Non-Real Time Mode - (using room;)
-    // MAIN client notify server to start
-    // server notify Other client to wait
-    // (Client side) MAIN client count down 10s
-    // (Client side) MAIN fire note at server
-    // server enqueue the notes
-    // (Client side) Other client wait for server to notify MAIN is done
-    // Once MAIN 10s run out, notify server 10s run out
-    // server notify other client to get ready
-    // server dequeue to all client but MAIN
-    // client calculate score and determine winner
-
-    /*
-     * USEFUL FUNCTIONS     
-     * USEFUL FUNCTIONS
-     * USEFUL FUNCTIONS
-     * USEFUL FUNCTIONS
-     * USEFUL FUNCTIONS
-     */
 
     /**
      * Choose a random element from a list
@@ -608,7 +492,6 @@ io.sockets.on('connection', function (socket) {
         }
         return null;
     }
-
     /**
      * Check if a nameString is duplicate
      * 
@@ -632,29 +515,6 @@ io.sockets.on('connection', function (socket) {
         }
         return arr;
     }
-
-    /*
-    function getClientGames() {
-        var arr = [];
-        for (var keys in gameDict) {
-            var arr2 = [];
-            for (var j = 0; j < gamesDict[keys].length; j++) {
-                arr2.push(userName[gamesDict[keys][j].id]);
-            }
-            arr.push(arr2);
-        }
-
-        return arr;
-    }*/
-
-    /*
-     * BASIC CONNECTION EVENT
-     * BASIC CONNECTION EVENT
-     * BASIC CONNECTION EVENT
-     * BASIC CONNECTION EVENT
-     * BASIC CONNECTION EVENT
-     */
-
     socket.on('error', function () {
         console.log("%s connection error", socket.id);
     });
@@ -667,77 +527,9 @@ io.sockets.on('connection', function (socket) {
     socket.on('reconnect_error', function () {
         console.log("%s reconnection error", socket.id);
     });
-
-    /*
-     * DEBUG STUFF
-     * DEBUG STUFF
-     * DEBUG STUFF
-     * DEBUG STUFF
-     * DEBUG STUFF
-     */
-    /*
-    socket.on('accept', function (name) {
-        //when person accepts another person -> redirect message
-        console.log("%s accepts %s", userName[socket.id], name);
-        getClientWithName(name).emit('accept', userName[socket.id]);
-    });*/
-
-
     socket.on('new message', function (data) {
         console.log("message: %s", data);
     });
-
-    
-
-    /*
-     socket.on('note first', function (data) {
-     console.log("%s> %s", userName[socket.id], data);
-     
-     var room = -1;
-     for (var i = 0; i < games.length; i++) {
-     for (var j = 0; j < games[i].length; j++) {
-     if (games[i][j].id === userName[socket.id]) {
-     room = i;
-     }
-     }
-     }
-     
-     if (typeof (gamesNotes[room]) === 'undefined') {
-     gamesNotes[room] = [];
-     }
-     
-     // Save the note to the gamesNotes[room]
-     // Used to verify score later
-     if (data.state === true) {
-     gamesNotes[room].push([data.time, data.note]);
-     }
-     
-     // Emit to everyone in the room but itself
-     socket.boardcast.emit('note first', data);
-     });
-     */
-
-    /*
-     //NAME HANDLING
-     socket.on('name', function (name) {
-     var isDup = false;
-     for (var key in userName) {
-     if (key !== socket.id && userName[key] === name) {
-     isDup = true;
-     }
-     }
-     if (!isDup) {
-     userName[socket.id] = name;
-     socket.emit('name', 'OK');
-     console.log("%s is named %s", socket.id, name);
-     } else {
-     socket.emit('name', 'NO');
-     console.log("%s is unable to name to %s", socket.id, name);
-     }
-     });
-     */
-    
-
 });
 
 function sendHeartbeat() {
