@@ -1,4 +1,3 @@
-const colors = require('colors');
 
 const uuid = require('uuid');
 const server = require('http').createServer();
@@ -21,8 +20,28 @@ var broadcaster = function () {
         process.exit(1);
     });
     console.log('Broadcasting...');
-}
+};
 broadcaster();
+
+const readline = require('readline');
+
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+rl.on('line', (input) => {
+    console.log(`Received: ${input}`);
+    if (line === "kickall") {
+        // Disconnect all the connected clients
+        for (let conn in connections) {
+            conn.disconnect();
+        }
+        userName = {};
+        gameDict = {};
+        scoreDict = {};
+    }
+});
 
 
 // The list of all client currently connected
@@ -45,14 +64,14 @@ let scoreDict = {};
 // On first connect
 io.sockets.on('connection', function (socket) {
 
-//    socket.sendBuffer = []; // clear buffers
+    //    socket.sendBuffer = []; // clear buffers
     connections.push(socket); // Add client to the connections list
 
     console.log("%s %s:%s connected".green,
-            socket.id,
-            socket.request.connection.remoteAddress,
-            socket.request.connection.remotePort
-            );
+        socket.id,
+        socket.request.connection.remoteAddress,
+        socket.request.connection.remotePort
+    );
 
     /**
      * event 'nameIsAvailable'
@@ -139,13 +158,13 @@ io.sockets.on('connection', function (socket) {
         socket.emit('get clients', JSON.stringify(
             {
                 "clientNames": getAllPlayers(),
-                "games": gameDictTmp, 
+                "games": gameDictTmp,
                 "clientIpPort": getClientIpPort()
             }
         ));
 
     });
-      
+
     /**
      * User challenge another user
      * 
@@ -249,13 +268,13 @@ io.sockets.on('connection', function (socket) {
             game[i].emit('timeout');
         }
     });
-     /**
-     * Score handling
-     * 
-     * event 'score'
-     * @param {int} score 
-     * 
-     */
+    /**
+    * Score handling
+    * 
+    * event 'score'
+    * @param {int} score 
+    * 
+    */
     socket.on('score', function (score) {
         console.log((userName[socket.id] + " got the score of " + score).yellow);
 
@@ -264,7 +283,7 @@ io.sockets.on('connection', function (socket) {
         } else {
             scoreDict[socket.id] = score;
         }
-        
+
 
     });
     /**
@@ -284,7 +303,7 @@ io.sockets.on('connection', function (socket) {
         for (let key in scoreDict) {
             ScoreStructure[userName[key]] = scoreDict[key];
         }
-        let game = gameDict[room];  
+        let game = gameDict[room];
         for (let i = 0; i < game.length; i++) {
             game[i].emit('game end', {
                 scores: ScoreStructure
@@ -324,7 +343,7 @@ io.sockets.on('connection', function (socket) {
     socket.on('disconnect', function (reason) {
         // when the user disconnects
 
-        console.log(("%s left because of "+reason).red, socket.id);
+        console.log(("%s left because of " + reason).red, socket.id);
 
         // Remove an element from list
         delete userName[socket.id];
@@ -359,7 +378,7 @@ io.sockets.on('connection', function (socket) {
         delete gameDict[keyToRemove];
 
         //remove from scores
-        delete scoreDict[socket.id]; 
+        delete scoreDict[socket.id];
     });
 
     /**
