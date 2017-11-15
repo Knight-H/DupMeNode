@@ -41,6 +41,9 @@ rl.on('line', (input) => {
         gameDict = {};
         scoreDict = {};
     }
+    if (line === "show") {
+        console.log(`Currently ${connections.length} client(s) connected`);
+    }
 });
 
 
