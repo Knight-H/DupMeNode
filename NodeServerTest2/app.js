@@ -32,7 +32,7 @@ const rl = readline.createInterface({
 
 rl.on('line', (input) => {
     console.log(`Received: ${input}`);
-    if (line === "kickall") {
+    if (input === "kickall") {
         // Disconnect all the connected clients
         for (let conn in connections) {
             conn.disconnect();
@@ -41,7 +41,7 @@ rl.on('line', (input) => {
         gameDict = {};
         scoreDict = {};
     }
-    if (line === "show") {
+    if (input === "show") {
         console.log(`Currently ${connections.length} client(s) connected`);
     }
 });
@@ -66,6 +66,8 @@ let scoreDict = {};
 
 // On first connect
 io.sockets.on('connection', function (socket) {
+
+    console.log("asdf");
 
     //    socket.sendBuffer = []; // clear buffers
     connections.push(socket); // Add client to the connections list
