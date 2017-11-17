@@ -91,6 +91,21 @@ io.sockets.on('connection', function (socket) {
         socket.emit('nameIsAvailable', isDup);
     });
 
+    socket.on('nameChanged', (nameStr) => {
+
+        // Lock the name to the client
+        let isDup = isNameDuplicate(nameStr);
+        if (!isDup) {
+            delete userName[socket.id];
+            userName[socket.id] = nameStr;
+        }
+        let subscribed = !isDup;
+        socket.emit('nameChanged', subscribed);
+
+        if (subscribed) console.log((socket.id + " is now named " + nameStr).cyan);
+        else console.log((socket.id + " is unable to name " + nameStr).cyan);
+    });
+
     /**
      * Apply and Lock the name for the client
      * 
